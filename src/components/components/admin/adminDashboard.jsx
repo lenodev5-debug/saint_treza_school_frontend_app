@@ -29,10 +29,6 @@ export default function AdminDashboard() {
                 </div>
 
                 <div className="grid grid-cols-1">
-                    <TeacherAssignmentList />
-                </div>
-
-                <div className="grid grid-cols-1">
                     <Users />
                 </div>
             </div>

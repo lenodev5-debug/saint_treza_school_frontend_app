@@ -3,6 +3,7 @@
 import { useCallback, useState } from "react";
 import FloatingMenu from "../../shared/ui/FloatingMenu";
 import { ProfileList, UserProfileCard } from '../../components/profile'
+import TeacherAssignmentList from "../teacher/teacherAssignmentList";
 
 const ROLE_TABS = [
   { key: "User", label: "All Users" },
@@ -111,6 +112,10 @@ export default function AdminUserDashboard() {
             />
           </>
         )}
+      </div>
+      
+      <div className="grid grid-cols-1">
+          <TeacherAssignmentList />
       </div>
 
       <FloatingMenu />
