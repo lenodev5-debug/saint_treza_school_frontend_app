@@ -1,5 +1,4 @@
 
-
 import { useCallback, useEffect, useState } from "react";
 import profileService from "../../lib/service/profileService";
 
@@ -18,7 +17,9 @@ export function useProfiles({ role, params = {}, autoFetch = true }) {
     try {
       const res = await profileService.list(role, params);
 
-      // Handle every possible shape the backend might return
+      // Handle every possible shape the backend might return.
+      // profileService.list() already normalizes each item,
+      // so `res.data` should be the flat array here.
       let raw = [];
       if (Array.isArray(res)) raw = res;
       else if (Array.isArray(res?.data)) raw = res.data;
@@ -29,9 +30,7 @@ export function useProfiles({ role, params = {}, autoFetch = true }) {
 
       setProfiles(raw.filter(isValidProfile));
     } catch (err) {
-      setError(
-        err?.response?.data?.message || "Failed to load profiles"
-      );
+      setError(err?.response?.data?.message || "Failed to load profiles");
       setProfiles([]);
     } finally {
       setLoading(false);

@@ -1,19 +1,25 @@
 export default function ProfileAvatar({ user, size = 28 }) {
+  // Support both flat user and nested profile.userId
+  const person = user?.userId ?? user;
+
   const initials =
-    user?.name
+    person?.name
       ?.split(" ")
+      .filter(Boolean)
       .map((n) => n[0])
       .join("")
       .slice(0, 2)
       .toUpperCase() ||
-    user?.email?.[0]?.toUpperCase() ||
+    person?.email?.[0]?.toUpperCase() ||
     "U";
 
-  if (user?.image) {
+  const image = person?.image ?? person?.avatar;
+
+  if (image) {
     return (
       <img
-        src={user.image}
-        alt={user.name ?? user.email}
+        src={image}
+        alt={person?.name ?? person?.email ?? "avatar"}
         className="rounded-full object-cover"
         style={{ width: size, height: size }}
       />

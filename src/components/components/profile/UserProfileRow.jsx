@@ -15,6 +15,15 @@ export default function UserProfileRow({
 
   const id = profile._id || profile.id;
 
+  // Nested userId OR flat
+  const user = profile.userId ?? profile;
+  const role = user.role ?? profile.role ?? "User";
+  const status = profile.status ?? user.status ?? "inactive";
+
+  const username =
+    user.username ||
+    (user.email ? user.email.split("@")[0] : "user");
+
   return (
     <tr
       onClick={() => onView?.(profile)}
@@ -24,7 +33,6 @@ export default function UserProfileRow({
           : "bg-white hover:bg-[#fafafa] dark:bg-[#1A1A1A] dark:hover:bg-[#212121]"
       }`}
     >
-      {/* checkbox */}
       <td className="w-10 pl-4">
         <input
           type="checkbox"
@@ -38,46 +46,39 @@ export default function UserProfileRow({
         />
       </td>
 
-      {/* avatar + username */}
       <td className="py-2 pr-4">
         <div className="flex items-center gap-2.5">
           <ProfileAvatar user={profile} size={28} />
           <span className="text-gray-700 dark:text-gray-200">
-            {profile.username ||
-              (profile.email ? profile.email.split("@")[0] : "user")}
+            {username}
           </span>
         </div>
       </td>
 
-      {/* display name */}
       <td className="py-2 pr-4 text-gray-700 dark:text-gray-200">
-        {profile.name ?? "—"}
+        {user.name ?? "—"}
       </td>
 
-      {/* email */}
       <td className="py-2 pr-4 text-gray-500 dark:text-gray-400">
-        {profile.email ?? "—"}
+        {user.email ?? "—"}
       </td>
 
-      {/* role + status pills */}
       <td className="py-2 pr-4">
         <div className="flex items-center gap-2">
           <span className="inline-flex h-6 items-center rounded bg-[#eefafa] px-2 text-xs font-medium text-[#0f2424] dark:bg-[#0f2424] dark:text-[#7adcdc]">
-            {profile.role ?? "User"}
+            {role}
           </span>
-          <StatusBadge status={profile.status || "inactive"} />
+          <StatusBadge status={status} />
         </div>
       </td>
 
-      {/* phone */}
       <td className="py-2 pr-4 text-gray-500 dark:text-gray-400">
-        {profile.phone ?? "—"}
+        {user.phone ?? "—"}
       </td>
 
-      {/* actions */}
       <td className="py-2 pr-4">
         <ProfileActions
-          profile={profile}
+          profile={{ ...profile, role }}
           onEdit={onEdit}
           onDeleted={onDeleted}
           onStatusChanged={onStatusChanged}

@@ -1,9 +1,7 @@
 const fmtDate = (d) => (d ? new Date(d).toLocaleDateString() : "—");
 
 const fmtLabel = (v) =>
-  typeof v === "string" && v.includes("_")
-    ? v.replace(/_/g, " ")
-    : v;
+  typeof v === "string" && v.includes("_") ? v.replace(/_/g, " ") : v;
 
 function Field({ label, value }) {
   return (
@@ -17,37 +15,48 @@ function Field({ label, value }) {
 }
 
 export default function ProfileFields({ profile }) {
+  // Support both flat and nested userId shapes
+  const user = profile?.userId ?? profile;
+  const role = user?.role ?? profile?.role;
+
+  // Backend puts role data at the top level of the profile doc
+  const teacher = profile?.teacherProfile ?? profile;
+  const student = profile?.studentProfile ?? profile;
+
   const renderRoleFields = () => {
-    switch (profile?.role) {
+    switch (role) {
       case "Teacher":
-        return profile.teacherProfile ? (
+        return (
           <>
-            <Field label="Employee #" value={profile.teacherProfile.employeeNumber} />
-            <Field label="Specialization" value={profile.teacherProfile.specialization} />
-            <Field label="Hire Date" value={fmtDate(profile.teacherProfile.hireDate)} />
+            <Field label="Employee #" value={teacher?.employeeNumber} />
+            <Field label="Specialization" value={teacher?.specialization} />
+            <Field label="Hire Date" value={fmtDate(teacher?.hireDate)} />
+            <Field label="Status" value={teacher?.status} />
           </>
-        ) : null;
+        );
 
       case "Student":
-        return profile.studentProfile ? (
+        return (
           <>
-            <Field label="Admission #" value={profile.studentProfile.admissionNumber} />
-            <Field label="Gender" value={profile.studentProfile.gender} />
-            <Field label="Date of Birth" value={fmtDate(profile.studentProfile.dateOfBirth)} />
-            <Field label="Address" value={profile.studentProfile.address} />
+            <Field label="Admission #" value={student?.admissionNumber} />
+            <Field label="Gender" value={student?.gender} />
+            <Field label="Date of Birth" value={fmtDate(student?.dateOfBirth)} />
+            <Field label="Address" value={student?.address} />
             <Field
               label="Emergency Contact"
-              value={profile.studentProfile.emergencyContactName}
+              value={student?.emergencyContactName}
             />
             <Field
               label="Emergency Phone"
-              value={profile.studentProfile.emergencyContactPhone}
+              value={student?.emergencyContactPhone}
             />
+            <Field label="Enrollment Date" value={fmtDate(student?.enrollmentDate)} />
+            <Field label="Status" value={student?.status} />
           </>
-        ) : null;
+        );
 
       case "Parent":
-        return profile.parentProfile ? (
+        return profile?.parentProfile ? (
           <>
             <Field label="Occupation" value={profile.parentProfile.occupation} />
             <Field label="Address" value={profile.parentProfile.address} />
@@ -59,26 +68,38 @@ export default function ProfileFields({ profile }) {
         ) : null;
 
       case "Librarian":
-        return profile.librarianProfile ? (
+        return profile?.librarianProfile ? (
           <>
-            <Field label="Employee #" value={profile.librarianProfile.employeeNumber} />
+            <Field
+              label="Employee #"
+              value={profile.librarianProfile.employeeNumber}
+            />
             <Field
               label="Position"
               value={fmtLabel(profile.librarianProfile.position)}
             />
-            <Field label="Hire Date" value={fmtDate(profile.librarianProfile.hireDate)} />
+            <Field
+              label="Hire Date"
+              value={fmtDate(profile.librarianProfile.hireDate)}
+            />
           </>
         ) : null;
 
       case "Admin":
-        return profile.adminProfile ? (
+        return profile?.adminProfile ? (
           <>
-            <Field label="Employee #" value={profile.adminProfile.employeeNumber} />
+            <Field
+              label="Employee #"
+              value={profile.adminProfile.employeeNumber}
+            />
             <Field
               label="Position"
               value={fmtLabel(profile.adminProfile.position)}
             />
-            <Field label="Hire Date" value={fmtDate(profile.adminProfile.hireDate)} />
+            <Field
+              label="Hire Date"
+              value={fmtDate(profile.adminProfile.hireDate)}
+            />
           </>
         ) : null;
 
@@ -89,8 +110,10 @@ export default function ProfileFields({ profile }) {
 
   return (
     <div className="grid grid-cols-2 gap-4 md:grid-cols-3">
-      <Field label="Email" value={profile.email} />
-      <Field label="Phone" value={profile.phone} />
+      <Field label="Email" value={user?.email} />
+      <Field label="Phone" value={user?.phone} />
+      <Field label="Role" value={user?.role} />
+      <Field label="Status" value={profile?.status ?? user?.status} />
       {renderRoleFields()}
     </div>
   );

@@ -1,13 +1,14 @@
-
 import { useMemo, useState } from "react";
-import { useProfiles } from '../../../hooks/useProfiles'
+import { useProfiles } from "../../../hooks/useProfiles";
 import UserProfileRow from "./UserProfileRow";
+import UserProfileDetail from "./UserProfileDetail";
 import {
   faColumns,
   faEye,
   faGauge,
   faTableList,
   faUser,
+  faArrowLeft,
 } from "@fortawesome/free-solid-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 
@@ -23,13 +24,11 @@ export default function ProfileList({
   profilesOverride,
   loadingOverride,
 }) {
-  const { profiles, loading, error, refetch, setProfiles } = useProfiles({
-    role,
-    params,
-  });
+  const { profiles, loading, error, refetch } = useProfiles({ role, params });
 
   const [local, setLocal] = useState(null);
   const [selected, setSelected] = useState([]);
+  const [openProfile, setOpenProfile] = useState(null); // detail view state
 
   const rawList = profilesOverride ?? local ?? profiles;
   const list = rawList.filter(isValidProfile);
@@ -54,6 +53,7 @@ export default function ProfileList({
     setLocal((prev) =>
       (prev ?? profiles).filter((x) => (x._id || x.id) !== id)
     );
+    setOpenProfile(null); // close detail if it was open
     onDeleted?.(id);
   };
 
@@ -65,6 +65,38 @@ export default function ProfileList({
     );
     onStatusChanged?.(id, status);
   };
+
+  // Row click → open detail
+  const handleRowClick = (profile) => {
+    onView?.(profile); // still bubble up if parent wants it
+    setOpenProfile(profile); // and show inline detail
+  };
+
+  /* ---------- DETAIL VIEW ---------- */
+  if (openProfile) {
+    const id = openProfile._id || openProfile.id;
+    const rowRole = openProfile.role ?? role;
+
+    return (
+      <div className="space-y-4">
+        <button
+          onClick={() => setOpenProfile(null)}
+          className="inline-flex h-9 items-center gap-2 rounded border border-gray-200 bg-white px-3 text-sm text-gray-700 hover:bg-gray-50 dark:border-[#2a2a2a] dark:bg-[#1f1f1f] dark:text-gray-200"
+        >
+          <FontAwesomeIcon icon={faArrowLeft} />
+          Back to list
+        </button>
+
+        <UserProfileDetail
+          profileId={id}
+          role={rowRole}
+          onEdit={(p) => onEdit?.(p ?? openProfile)}
+          onDeleted={handleDeleted}
+          onStatusChanged={handleStatusChanged}
+        />
+      </div>
+    );
+  }
 
   /* ---------- loading ---------- */
   if (isLoading) {
@@ -90,9 +122,10 @@ export default function ProfileList({
     );
   }
 
+  /* ---------- LIST VIEW ---------- */
   return (
     <div className="space-y-4">
-      {/* ---------- top bar: Add Filter + chip ---------- */}
+      {/* top bar: Add Filter + chip */}
       <div className="flex flex-wrap items-center gap-3">
         <button className="inline-flex h-10 items-center gap-2 rounded bg-[#14b8a6] px-4 text-sm font-medium text-white transition hover:bg-[#0d9488]">
           <span className="text-base leading-none">≡</span>
@@ -109,7 +142,7 @@ export default function ProfileList({
         </div>
       </div>
 
-      {/* ---------- counter + view toggles ---------- */}
+      {/* counter + view toggles */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2 text-gray-700 dark:text-gray-200">
           <FontAwesomeIcon icon={faUser} className="text-gray-500" />
@@ -137,7 +170,7 @@ export default function ProfileList({
         </div>
       </div>
 
-      {/* ---------- table ---------- */}
+      {/* table */}
       <div className="overflow-hidden rounded-lg bg-white shadow-sm dark:bg-[#1A1A1A]">
         <div className="overflow-x-auto">
           <table className="w-full">
@@ -178,7 +211,7 @@ export default function ProfileList({
                       profile={p}
                       selected={selected.includes(id)}
                       onSelect={handleSelectOne}
-                      onView={onView}
+                      onView={handleRowClick}
                       onEdit={onEdit}
                       onDeleted={handleDeleted}
                       onStatusChanged={handleStatusChanged}
