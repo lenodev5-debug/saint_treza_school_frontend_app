@@ -35,6 +35,7 @@ import LibrarianDashboard from './components/components/librarian/LibrarianDashb
 import LibrarianBookStore from './components/components/librarian/LibrarianBookStore'
 import BorrowedBookDashboard from './components/components/librarian/BorrowedBookDashboard';
 import LibrarianMembers from './components/components/librarian/librarianMembers';
+import Mystudents from './components/components/teacher/Mystudent';
 
 function App() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -243,7 +244,19 @@ function App() {
         }
       />
       
-
+      <Route
+        path="/teacher/students"
+        element={
+          <ProtectedRoute allowedRoles={['Teacher']}>
+            <Header
+              onMenuClick={() => setSidebarOpen((prev) => !prev)}
+              sidebarOpen={sidebarOpen}
+              />
+            <Sidebar isOpen={sidebarOpen} />
+            <Mystudents />
+          </ProtectedRoute>
+        }
+      />
       {/* ========================================= */}
       {/* PARENT DASHBOARD */}
       {/* ========================================= */}

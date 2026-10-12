@@ -2,16 +2,29 @@
 import { useEffect, useMemo, useState } from "react";
 
 import teacherService from "../../../../../lib/service/admin/teacherService";
+import studentService from "../../../../../lib/service/admin/studentService";
 import userService from "../../../../../lib/service/admin/userService";
 
-const ALLOWED_STATUSES = [
+const PROFILE_TYPES = {
+    TEACHER: "teacher",
+    STUDENT: "student",
+};
+
+const TEACHER_STATUSES = [
     "active",
     "inactive",
     "suspended",
     "resigned",
 ];
 
-const INITIAL_FORM = {
+const STUDENT_STATUSES = [
+    "active",
+    "inactive",
+    "graduated",
+    "transferred",
+];
+
+const INITIAL_TEACHER_FORM = {
     userId: "",
     employeeNumber: "",
     specialization: "",
@@ -19,138 +32,239 @@ const INITIAL_FORM = {
     status: "active",
 };
 
+const INITIAL_STUDENT_FORM = {
+    userId: "",
+    admissionNumber: "",
+    dateOfBirth: "",
+    gender: "",
+    address: "",
+    emergencyContactName: "",
+    emergencyContactPhone: "",
+    enrollmentDate: new Date().toISOString().split("T")[0],
+    profileCompleted: false,
+    status: "active",
+};
+
+const inputClass =
+    "w-full rounded-xl border border-white/10 bg-[#0f0f0f] px-4 py-3 text-sm text-white outline-none transition focus:border-white/30 disabled:cursor-not-allowed disabled:opacity-60";
+
+const labelClass =
+    "mb-2 block text-sm font-medium text-white/80";
+
+function getList(response, keys = []) {
+    if (Array.isArray(response)) return response;
+
+    for (const key of keys) {
+        if (Array.isArray(response?.[key])) {
+            return response[key];
+        }
+    }
+
+    if (Array.isArray(response?.data)) {
+        return response.data;
+    }
+
+    return [];
+}
+
+function getId(value) {
+    const id =
+        value?._id ??
+        value?.id ??
+        value ??
+        "";
+
+    return id ? String(id) : "";
+}
+
+function formatDate(value) {
+    if (!value) return "";
+
+    const date = new Date(value);
+
+    if (Number.isNaN(date.getTime())) return "";
+
+    return date.toISOString().split("T")[0];
+}
+
 export default function TeacherProfileForm({
     teacher = null,
+    student = null,
+    profileType: initialProfileType,
     onSuccess,
     onCancel,
 }) {
-    const isEditMode = Boolean(teacher?._id);
+    const editingProfile = teacher || student || null;
 
-    const [formData, setFormData] = useState(INITIAL_FORM);
+    const isEditMode = Boolean(
+        editingProfile?._id
+    );
+    
+    const initialType =
+    initialProfileType === PROFILE_TYPES.STUDENT || student
+        ? PROFILE_TYPES.STUDENT
+        : PROFILE_TYPES.TEACHER;
+
+    const [profileType, setProfileType] = useState(initialType);
+
+    const [formData, setFormData] = useState(() =>
+        initialType === PROFILE_TYPES.STUDENT
+            ? { ...INITIAL_STUDENT_FORM }
+            : { ...INITIAL_TEACHER_FORM }
+    );
 
     const [users, setUsers] = useState([]);
     const [teachers, setTeachers] = useState([]);
+    const [students, setStudents] = useState([]);
 
     const [loading, setLoading] = useState(false);
     const [loadingData, setLoadingData] = useState(true);
     const [error, setError] = useState("");
 
+    const isTeacher = profileType === PROFILE_TYPES.TEACHER;
+
     /*
-     * Load:
-     * 1. Users with role = Teacher
-     * 2. Existing TeacherProfiles
+     * Load existing User accounts and profiles.
+     * Each profile is associated with an existing User.
      */
     useEffect(() => {
-        const loadData = async () => {
+        let cancelled = false;
+
+        async function loadData() {
+            setLoadingData(true);
+            setError("");
+
             try {
-                setLoadingData(true);
-                setError("");
+                const usersResponse = await userService.getAllUsers();
 
-                const [usersResponse, teachersResponse] =
-                    await Promise.all([
-                        userService.getAllUsers(),
-                        teacherService.getAllTeachers(),
-                    ]);
+                if (cancelled) return;
 
-                const userList =
-                    Array.isArray(usersResponse)
-                        ? usersResponse
-                        : usersResponse?.users ||
-                          usersResponse?.data ||
-                          [];
-
-                const teacherList =
-                    Array.isArray(teachersResponse)
-                        ? teachersResponse
-                        : teachersResponse?.teachers ||
-                          teachersResponse?.data ||
-                          [];
-
-                setUsers(userList);
-                setTeachers(teacherList);
+                setUsers(getList(usersResponse, ["users"]));
             } catch (err) {
-                console.error(
-                    "Failed to load teacher profile data:",
-                    err
-                );
+                if (cancelled) return;
+
+                console.error("Failed to load users:", err);
 
                 setError(
                     err?.response?.data?.message ||
-                    "Failed to load teacher data."
+                        "Failed to load user accounts."
                 );
-            } finally {
+            }
+
+            try {
+                const teachersResponse =
+                    await teacherService.getAllTeachers();
+
+                if (!cancelled) {
+                    setTeachers(
+                        getList(teachersResponse, ["teachers"])
+                    );
+                }
+            } catch (err) {
+                console.error("Failed to load teacher profiles:", err);
+            }
+
+            try {
+                const studentsResponse =
+                    await studentService.getStudents();
+
+                if (!cancelled) {
+                    setStudents(
+                        getList(studentsResponse, ["students"])
+                    );
+                }
+            } catch (err) {
+                console.error("Failed to load student profiles:", err);
+            }
+
+            if (!cancelled) {
                 setLoadingData(false);
             }
-        };
+        }
 
         loadData();
+
+        return () => {
+            cancelled = true;
+        };
     }, []);
 
     /*
-     * Populate form when editing an existing teacher profile.
+     * Populate the correct form when editing.
      */
     useEffect(() => {
-        if (!teacher) {
-            setFormData(INITIAL_FORM);
+        if (teacher) {
+            setProfileType(PROFILE_TYPES.TEACHER);
+
+            setFormData({
+                userId: getId(teacher.userId),
+                employeeNumber: teacher.employeeNumber || "",
+                specialization: teacher.specialization || "",
+                hireDate: formatDate(teacher.hireDate),
+                status: teacher.status || "active",
+            });
+
             return;
         }
 
-        const teacherUserId =
-            teacher.userId?._id ||
-            teacher.userId?.id ||
-            teacher.userId ||
-            "";
+        if (student) {
+            setProfileType(PROFILE_TYPES.STUDENT);
 
-        setFormData({
-            userId: String(teacherUserId),
-            employeeNumber: teacher.employeeNumber || "",
-            specialization: teacher.specialization || "",
-            hireDate: teacher.hireDate
-                ? new Date(teacher.hireDate)
-                      .toISOString()
-                      .split("T")[0]
-                : "",
-            status: teacher.status || "active",
-        });
-    }, [teacher]);
+            setFormData({
+                userId: getId(student.userId),
+                admissionNumber: student.admissionNumber || "",
+                dateOfBirth: formatDate(student.dateOfBirth),
+                gender: student.gender || "",
+                address: student.address || "",
+                emergencyContactName:
+                    student.emergencyContactName || "",
+                emergencyContactPhone:
+                    student.emergencyContactPhone || "",
+                enrollmentDate: formatDate(
+                    student.enrollmentDate
+                ),
+                profileCompleted:
+                    student.profileCompleted ?? false,
+                status: student.status || "active",
+            });
+
+            return;
+        }
+
+        if (!isEditMode) {
+            setFormData(
+                profileType === PROFILE_TYPES.TEACHER
+                    ? INITIAL_TEACHER_FORM
+                    : INITIAL_STUDENT_FORM
+            );
+        }
+    }, [teacher, student, isEditMode, profileType]);
 
     /*
-     * Only users whose role is Teacher are eligible.
-     *
-     * When creating:
-     *   Teacher User + no TeacherProfile = selectable
-     *
-     * When editing:
-     *   The current profile's user is also selectable.
+     * A user can only have one profile of each type.
+     * Existing profiles of the opposite type do not
+     * prevent the user from being selected.
      */
-    const availableTeachers = useMemo(() => {
-        const teacherProfilesByUserId = new Set(
-            teachers
-                .map((profile) => {
-                    const userId =
-                        profile.userId?._id ||
-                        profile.userId?.id ||
-                        profile.userId;
+    const availableUsers = useMemo(() => {
+        const profiles = isTeacher ? teachers : students;
 
-                    return userId ? String(userId) : null;
-                })
+        const existingUserIds = new Set(
+            profiles
+                .map((profile) => getId(profile.userId))
                 .filter(Boolean)
         );
 
+        const expectedRole = isTeacher ? "Teacher" : "Student";
+
         return users.filter((user) => {
-            if (user.role !== "Teacher") {
+            if (user.role !== expectedRole) {
                 return false;
             }
 
-            const userId = String(user._id || user.id || "");
+            const userId = getId(user);
 
-            if (!userId) {
-                return false;
-            }
+            if (!userId) return false;
 
-            /*
-             * In edit mode, keep the currently selected teacher.
-             */
             if (
                 isEditMode &&
                 userId === String(formData.userId)
@@ -158,61 +272,84 @@ export default function TeacherProfileForm({
                 return true;
             }
 
-            /*
-             * Do not allow another TeacherProfile for
-             * the same User.
-             */
-            return !teacherProfilesByUserId.has(userId);
+            return !existingUserIds.has(userId);
         });
     }, [
         users,
         teachers,
+        students,
+        isTeacher,
         isEditMode,
         formData.userId,
     ]);
 
-    const selectedUser = useMemo(() => {
-        return users.find(
-            (user) =>
-                String(user._id || user.id) ===
-                String(formData.userId)
-        );
-    }, [users, formData.userId]);
+    const selectedUser = useMemo(
+        () =>
+            users.find(
+                (user) => getId(user) === String(formData.userId)
+            ),
+        [users, formData.userId]
+    );
 
-    const handleChange = (event) => {
-        const { name, value } = event.target;
+   function handleProfileTypeChange(nextType) {
+        if (isEditMode || loading) return;
+
+        setProfileType(nextType);
+
+        setFormData(
+            nextType === PROFILE_TYPES.TEACHER
+                ? { ...INITIAL_TEACHER_FORM }
+                : { ...INITIAL_STUDENT_FORM }
+        );
+
+        setError("");
+    }
+
+    function handleChange(event) {
+        const { name, value, type, checked } = event.target;
 
         setFormData((previous) => ({
             ...previous,
-            [name]: value,
+            [name]: type === "checkbox" ? checked : value,
         }));
 
-        if (error) {
-            setError("");
-        }
-    };
+        setError("");
+    }
 
-    const validateForm = () => {
+    function validateForm() {
         if (!formData.userId) {
-            return "Please select a teacher.";
+            return `Please select a ${isTeacher ? "teacher" : "student"}.`;
         }
 
-        if (!formData.employeeNumber.trim()) {
-            return "Employee number is required.";
-        }
+        if (isTeacher) {
+            if (!formData.employeeNumber.trim()) {
+                return "Employee number is required.";
+            }
 
-        if (!formData.status) {
-            return "Please select a status.";
-        }
+            if (!TEACHER_STATUSES.includes(formData.status)) {
+                return "Invalid teacher status.";
+            }
+        } else {
+            if (!formData.admissionNumber.trim()) {
+                return "Admission number is required.";
+            }
 
-        if (!ALLOWED_STATUSES.includes(formData.status)) {
-            return "Invalid teacher status.";
+            if (
+                formData.gender &&
+                !["male", "female", "other"].includes(formData.gender)
+            ) {
+                return "Invalid gender.";
+            }
+
+            if (!STUDENT_STATUSES.includes(formData.status)) {
+                return "Invalid student status.";
+            }
         }
 
         return "";
-    };
+    }
 
-    const handleSubmit = async (event) => {
+    async function handleSubmit(event) {
         event.preventDefault();
 
         const validationError = validateForm();
@@ -226,70 +363,67 @@ export default function TeacherProfileForm({
             setLoading(true);
             setError("");
 
-            const payload = {
-                userId: formData.userId,
-                employeeNumber:
-                    formData.employeeNumber.trim().toUpperCase(),
-                specialization:
-                    formData.specialization.trim() || null,
-                hireDate: formData.hireDate || undefined,
-                status: formData.status,
-            };
-
             let response;
 
-            if (isEditMode) {
-                response = await teacherService.updateTeacher(
-                    teacher._id,
-                    payload
-                );
+            if (isTeacher) {
+                const payload = {
+                    userId: formData.userId,
+                    employeeNumber:
+                        formData.employeeNumber.trim().toUpperCase(),
+                    specialization:
+                        formData.specialization.trim() || null,
+                    hireDate: formData.hireDate || undefined,
+                    status: formData.status,
+                };
+
+                response = isEditMode
+                    ? await teacherService.updateTeacher(
+                          teacher._id,
+                          payload
+                      )
+                    : await teacherService.createTeacher(payload);
             } else {
-                response = await teacherService.createTeacher(
-                    payload
-                );
-            }
+                const payload = {
+                    userId: formData.userId,
+                    admissionNumber:
+                        formData.admissionNumber.trim().toUpperCase(),
+                    dateOfBirth: formData.dateOfBirth || null,
+                    gender: formData.gender || null,
+                    address: formData.address.trim() || null,
+                    emergencyContactName:
+                        formData.emergencyContactName.trim() || null,
+                    emergencyContactPhone:
+                        formData.emergencyContactPhone.trim() || null,
+                    enrollmentDate:
+                        formData.enrollmentDate || undefined,
+                    profileCompleted: formData.profileCompleted,
+                    status: formData.status,
+                };
 
-            /*
-             * Refresh teacher profiles so the next create
-             * operation has the latest information.
-             */
-            try {
-                const refreshedTeachers =
-                    await teacherService.getAllTeachers();
-
-                const teacherList =
-                    Array.isArray(refreshedTeachers)
-                        ? refreshedTeachers
-                        : refreshedTeachers?.teachers ||
-                          refreshedTeachers?.data ||
-                          [];
-
-                setTeachers(teacherList);
-            } catch (refreshError) {
-                console.warn(
-                    "Teacher profile refresh failed:",
-                    refreshError
-                );
+                response = isEditMode
+                    ? await studentService.updateStudent(
+                          student._id,
+                          payload
+                      )
+                    : await studentService.createStudentProfile(payload);
             }
 
             if (onSuccess) {
                 onSuccess(response);
             }
         } catch (err) {
-            console.error(
-                "Teacher profile save error:",
-                err
-            );
+            console.error("Profile save error:", err);
 
-            const message =
+            setError(
                 err?.response?.data?.message ||
-                "Failed to save teacher profile.";
-
-            setError(message);
+                `Failed to ${isEditMode ? "update" : "create"} ${
+                    isTeacher ? "teacher" : "student"
+                } profile.`
+            );
         } finally {
             setLoading(false);
         }
-    };
+    }
 
     if (loadingData) {
         return (
@@ -297,7 +431,7 @@ export default function TeacherProfileForm({
                 <div className="flex items-center gap-3">
                     <div className="h-5 w-5 animate-spin rounded-full border-2 border-white/20 border-t-white" />
                     <span className="text-sm text-white/70">
-                        Loading teacher data...
+                        Loading users and profiles...
                     </span>
                 </div>
             </div>
@@ -309,36 +443,80 @@ export default function TeacherProfileForm({
             onSubmit={handleSubmit}
             className="w-full rounded-2xl border border-white/10 bg-[#151515] p-6 text-white shadow-xl"
         >
-            {/* Header */}
             <div className="mb-6">
                 <h2 className="text-xl font-semibold">
                     {isEditMode
-                        ? "Edit Teacher Profile"
-                        : "Create Teacher Profile"}
+                        ? `Edit ${isTeacher ? "Teacher" : "Student"} Profile`
+                        : "Create Profile"}
                 </h2>
 
                 <p className="mt-1 text-sm text-white/50">
-                    {isEditMode
-                        ? "Update the teacher profile information."
-                        : "Create a school profile for an existing Teacher user."}
+                    Create a profile for an existing{" "}
+                    {isTeacher ? "Teacher" : "Student"} user.
                 </p>
             </div>
 
-            {/* Error */}
+            {/* Profile type switch */}
+            {!isEditMode && (
+                <div className="mb-6">
+                    <label className={labelClass}>
+                        Profile Type
+                    </label>
+
+                    <div className="grid grid-cols-2 gap-2 rounded-xl border border-white/10 bg-[#0f0f0f] p-1">
+                        <button
+                            type="button"
+                            onClick={() =>
+                                handleProfileTypeChange(
+                                    PROFILE_TYPES.TEACHER
+                                )
+                            }
+                            disabled={loading}
+                            aria-pressed={isTeacher}
+                            className={`rounded-lg px-4 py-3 text-sm font-semibold transition ${
+                                isTeacher
+                                    ? "bg-white text-black"
+                                    : "text-white/60 hover:bg-white/5 hover:text-white"
+                            }`}
+                        >
+                            Teacher
+                        </button>
+
+                        <button
+                            type="button"
+                            onClick={() =>
+                                handleProfileTypeChange(
+                                    PROFILE_TYPES.STUDENT
+                                )
+                            }
+                            disabled={loading}
+                            aria-pressed={!isTeacher}
+                            className={`rounded-lg px-4 py-3 text-sm font-semibold transition ${
+                                !isTeacher
+                                    ? "bg-white text-black"
+                                    : "text-white/60 hover:bg-white/5 hover:text-white"
+                            }`}
+                        >
+                            Student
+                        </button>
+                    </div>
+                </div>
+            )}
+
             {error && (
-                <div className="mb-5 rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-300">
+                <div
+                    role="alert"
+                    className="mb-5 rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-300"
+                >
                     {error}
                 </div>
             )}
 
             <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
-                {/* Teacher */}
+                {/* User selection */}
                 <div className="md:col-span-2">
-                    <label
-                        htmlFor="userId"
-                        className="mb-2 block text-sm font-medium text-white/80"
-                    >
-                        Teacher
+                    <label htmlFor="userId" className={labelClass}>
+                        {isTeacher ? "Teacher User" : "Student User"}
                     </label>
 
                     <select
@@ -347,30 +525,29 @@ export default function TeacherProfileForm({
                         value={formData.userId}
                         onChange={handleChange}
                         disabled={isEditMode || loading}
-                        className="w-full rounded-xl border border-white/10 bg-[#0f0f0f] px-4 py-3 text-sm text-white outline-none transition focus:border-white/30 disabled:cursor-not-allowed disabled:opacity-60"
+                        required
+                        className={inputClass}
                     >
                         <option value="">
-                            Select a teacher
+                            Select a {isTeacher ? "teacher" : "student"}
                         </option>
 
-                        {availableTeachers.map((user) => (
+                        {availableUsers.map((user) => (
                             <option
-                                key={user._id || user.id}
-                                value={user._id || user.id}
+                                key={getId(user)}
+                                value={getId(user)}
                             >
                                 {user.name || user.fullName || user.email}
-                                {user.email
-                                    ? ` — ${user.email}`
-                                    : ""}
+                                {user.email ? ` — ${user.email}` : ""}
                             </option>
                         ))}
                     </select>
 
-                    {availableTeachers.length === 0 && (
+                    {availableUsers.length === 0 && (
                         <p className="mt-2 text-xs text-amber-400">
-                            {isEditMode
-                                ? "The current teacher profile could not be found."
-                                : "All Teacher users already have a teacher profile."}
+                            {isTeacher
+                                ? "No eligible Teacher users are available."
+                                : "No eligible Student users are available."}
                         </p>
                     )}
 
@@ -380,10 +557,10 @@ export default function TeacherProfileForm({
                                 Selected user
                             </p>
 
-                            <p className="mt-1 text-sm font-medium text-white">
+                            <p className="mt-1 text-sm font-medium">
                                 {selectedUser.name ||
                                     selectedUser.fullName ||
-                                    "Teacher"}
+                                    "User"}
                             </p>
 
                             {selectedUser.email && (
@@ -395,106 +572,240 @@ export default function TeacherProfileForm({
                     )}
                 </div>
 
-                {/* Employee Number */}
-                <div>
-                    <label
-                        htmlFor="employeeNumber"
-                        className="mb-2 block text-sm font-medium text-white/80"
-                    >
-                        Employee Number
-                    </label>
+                {isTeacher ? (
+                    <>
+                        <div>
+                            <label htmlFor="employeeNumber" className={labelClass}>
+                                Employee Number
+                            </label>
+                            <input
+                                id="employeeNumber"
+                                name="employeeNumber"
+                                value={formData.employeeNumber}
+                                onChange={handleChange}
+                                placeholder="e.g. TCH-0001"
+                                disabled={loading}
+                                required
+                                className={inputClass}
+                            />
+                        </div>
 
-                    <input
-                        id="employeeNumber"
-                        name="employeeNumber"
-                        type="text"
-                        value={formData.employeeNumber}
-                        onChange={handleChange}
-                        placeholder="e.g. TCH-0001"
-                        disabled={loading}
-                        className="w-full rounded-xl border border-white/10 bg-[#0f0f0f] px-4 py-3 text-sm text-white placeholder-white/25 outline-none transition focus:border-white/30 disabled:opacity-60"
-                    />
-                </div>
+                        <div>
+                            <label htmlFor="specialization" className={labelClass}>
+                                Specialization
+                            </label>
+                            <input
+                                id="specialization"
+                                name="specialization"
+                                value={formData.specialization}
+                                onChange={handleChange}
+                                placeholder="e.g. Mathematics"
+                                disabled={loading}
+                                className={inputClass}
+                            />
+                        </div>
 
-                {/* Specialization */}
-                <div>
-                    <label
-                        htmlFor="specialization"
-                        className="mb-2 block text-sm font-medium text-white/80"
-                    >
-                        Specialization
-                    </label>
+                        <div>
+                            <label htmlFor="hireDate" className={labelClass}>
+                                Hire Date
+                            </label>
+                            <input
+                                id="hireDate"
+                                name="hireDate"
+                                type="date"
+                                value={formData.hireDate}
+                                onChange={handleChange}
+                                disabled={loading}
+                                className={inputClass}
+                            />
+                        </div>
 
-                    <input
-                        id="specialization"
-                        name="specialization"
-                        type="text"
-                        value={formData.specialization}
-                        onChange={handleChange}
-                        placeholder="e.g. Mathematics"
-                        disabled={loading}
-                        className="w-full rounded-xl border border-white/10 bg-[#0f0f0f] px-4 py-3 text-sm text-white placeholder-white/25 outline-none transition focus:border-white/30 disabled:opacity-60"
-                    />
-                </div>
-
-                {/* Hire Date */}
-                <div>
-                    <label
-                        htmlFor="hireDate"
-                        className="mb-2 block text-sm font-medium text-white/80"
-                    >
-                        Hire Date
-                    </label>
-
-                    <input
-                        id="hireDate"
-                        name="hireDate"
-                        type="date"
-                        value={formData.hireDate}
-                        onChange={handleChange}
-                        disabled={loading}
-                        className="w-full rounded-xl border border-white/10 bg-[#0f0f0f] px-4 py-3 text-sm text-white outline-none transition focus:border-white/30 disabled:opacity-60"
-                    />
-                </div>
-
-                {/* Status */}
-                <div>
-                    <label
-                        htmlFor="status"
-                        className="mb-2 block text-sm font-medium text-white/80"
-                    >
-                        Status
-                    </label>
-
-                    <select
-                        id="status"
-                        name="status"
-                        value={formData.status}
-                        onChange={handleChange}
-                        disabled={loading}
-                        className="w-full rounded-xl border border-white/10 bg-[#0f0f0f] px-4 py-3 text-sm text-white outline-none transition focus:border-white/30 disabled:opacity-60"
-                    >
-                        {ALLOWED_STATUSES.map((status) => (
-                            <option
-                                key={status}
-                                value={status}
+                        <div>
+                            <label htmlFor="status" className={labelClass}>
+                                Status
+                            </label>
+                            <select
+                                id="status"
+                                name="status"
+                                value={formData.status}
+                                onChange={handleChange}
+                                disabled={loading}
+                                className={inputClass}
                             >
-                                {status.charAt(0).toUpperCase() +
-                                    status.slice(1)}
-                            </option>
-                        ))}
-                    </select>
-                </div>
+                                {TEACHER_STATUSES.map((status) => (
+                                    <option key={status} value={status}>
+                                        {status.charAt(0).toUpperCase() +
+                                            status.slice(1)}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+                    </>
+                ) : (
+                    <>
+                        <div>
+                            <label htmlFor="admissionNumber" className={labelClass}>
+                                Admission Number
+                            </label>
+                            <input
+                                id="admissionNumber"
+                                name="admissionNumber"
+                                value={formData.admissionNumber}
+                                onChange={handleChange}
+                                placeholder="e.g. STD-0001"
+                                disabled={loading}
+                                required
+                                className={inputClass}
+                            />
+                        </div>
+
+                        <div>
+                            <label htmlFor="dateOfBirth" className={labelClass}>
+                                Date of Birth
+                            </label>
+                            <input
+                                id="dateOfBirth"
+                                name="dateOfBirth"
+                                type="date"
+                                value={formData.dateOfBirth}
+                                onChange={handleChange}
+                                disabled={loading}
+                                className={inputClass}
+                            />
+                        </div>
+
+                        <div>
+                            <label htmlFor="gender" className={labelClass}>
+                                Gender
+                            </label>
+                            <select
+                                id="gender"
+                                name="gender"
+                                value={formData.gender}
+                                onChange={handleChange}
+                                disabled={loading}
+                                className={inputClass}
+                            >
+                                <option value="">Select gender</option>
+                                <option value="male">Male</option>
+                                <option value="female">Female</option>
+                                <option value="other">Other</option>
+                            </select>
+                        </div>
+
+                        <div>
+                            <label htmlFor="enrollmentDate" className={labelClass}>
+                                Enrollment Date
+                            </label>
+                            <input
+                                id="enrollmentDate"
+                                name="enrollmentDate"
+                                type="date"
+                                value={formData.enrollmentDate}
+                                onChange={handleChange}
+                                disabled={loading}
+                                className={inputClass}
+                            />
+                        </div>
+
+                        <div className="md:col-span-2">
+                            <label htmlFor="address" className={labelClass}>
+                                Address
+                            </label>
+                            <textarea
+                                id="address"
+                                name="address"
+                                value={formData.address}
+                                onChange={handleChange}
+                                placeholder="Student address"
+                                disabled={loading}
+                                rows={2}
+                                className={inputClass}
+                            />
+                        </div>
+
+                        <div>
+                            <label
+                                htmlFor="emergencyContactName"
+                                className={labelClass}
+                            >
+                                Emergency Contact Name
+                            </label>
+                            <input
+                                id="emergencyContactName"
+                                name="emergencyContactName"
+                                value={formData.emergencyContactName}
+                                onChange={handleChange}
+                                placeholder="Parent or guardian name"
+                                disabled={loading}
+                                className={inputClass}
+                            />
+                        </div>
+
+                        <div>
+                            <label
+                                htmlFor="emergencyContactPhone"
+                                className={labelClass}
+                            >
+                                Emergency Contact Phone
+                            </label>
+                            <input
+                                id="emergencyContactPhone"
+                                name="emergencyContactPhone"
+                                type="tel"
+                                value={formData.emergencyContactPhone}
+                                onChange={handleChange}
+                                placeholder="Phone number"
+                                disabled={loading}
+                                className={inputClass}
+                            />
+                        </div>
+
+                        <div className="md:col-span-2">
+                            <label className="flex items-center gap-3 text-sm text-white/80">
+                                <input
+                                    type="checkbox"
+                                    name="profileCompleted"
+                                    checked={formData.profileCompleted}
+                                    onChange={handleChange}
+                                    disabled={loading}
+                                    className="h-4 w-4 accent-white"
+                                />
+                                Mark student profile as completed
+                            </label>
+                        </div>
+
+                        <div className="md:col-span-2">
+                            <label htmlFor="status" className={labelClass}>
+                                Status
+                            </label>
+                            <select
+                                id="status"
+                                name="status"
+                                value={formData.status}
+                                onChange={handleChange}
+                                disabled={loading}
+                                className={inputClass}
+                            >
+                                {STUDENT_STATUSES.map((status) => (
+                                    <option key={status} value={status}>
+                                        {status.charAt(0).toUpperCase() +
+                                            status.slice(1)}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+                    </>
+                )}
             </div>
 
-            {/* Actions */}
             <div className="mt-7 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
                 {onCancel && (
                     <button
                         type="button"
                         onClick={onCancel}
                         disabled={loading}
-                        className="rounded-xl border border-white/10 bg-white/5 px-5 py-3 text-sm font-medium text-white/80 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
+                        className="rounded-xl border border-white/10 bg-white/5 px-5 py-3 text-sm font-medium text-white/80 transition hover:bg-white/10 disabled:opacity-50"
                     >
                         Cancel
                     </button>
@@ -502,14 +813,14 @@ export default function TeacherProfileForm({
 
                 <button
                     type="submit"
-                    disabled={loading || availableTeachers.length === 0}
+                    disabled={loading || availableUsers.length === 0}
                     className="rounded-xl bg-white px-5 py-3 text-sm font-semibold text-black transition hover:bg-white/90 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                     {loading
                         ? "Saving..."
-                        : isEditMode
-                        ? "Update Teacher"
-                        : "Create Teacher Profile"}
+                        : `${isEditMode ? "Update" : "Create"} ${
+                              isTeacher ? "Teacher" : "Student"
+                          } Profile`}
                 </button>
             </div>
         </form>

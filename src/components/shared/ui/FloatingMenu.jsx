@@ -19,13 +19,20 @@ import {
 } from "@fortawesome/free-solid-svg-icons";
 
 /* Icon per form tab */
+
 const TAB_ICONS = {
     grade: faGraduationCap,
     academicYear: faCalendarDays,
     timetable: faTableCells,
     department: faBuilding,
     subject: faBook,
+    user: faUser,
+    book: faBook,
+    teacherAssignment: faGraduationCap,
+    teacherGradeCoordinator: faUser,
+    teacherProfileForm: faUser,
 };
+
 
 /* ---------- Modal ---------- */
 function FormModal({ open, onClose, title, children }) {
@@ -113,7 +120,7 @@ export default function FloatingMenu({
                   { id: "home",    label: "Home",    icon: faHome,            onClick: () => navigate("/admin") },
                   { id: "search",  label: "Search",  icon: faMagnifyingGlass, onClick: () => console.log("search") },
                   { id: "history", label: "History", icon: faClockRotateLeft, onClick: () => navigate("/admin/history") },
-                  { id: "profile", label: "Profile", icon: faUser,            onClick: () => navigate("/admin/profile") },
+                  { id: "Dashboard", label: "Dashboard", icon: faUser,            onClick: () => navigate("/admin/profile") },
               ]
             : [];
 
@@ -130,7 +137,14 @@ export default function FloatingMenu({
     /* Hide the FAB if there's nothing to show */
     if (!user || menuItems.length === 0) return null;
 
+    
     const ActiveForm = activeTab?.Component;
+
+    const modalTitle =
+        activeTab?.key === "teacherProfileForm"
+            ? "Create Teacher or Student Profile"
+            : `Create ${activeTab?.label ?? ""}`;
+
 
     return (
         <>
@@ -140,15 +154,20 @@ export default function FloatingMenu({
                 items={menuItems}
             />
 
-            <FormModal
-                open={!!modalKey}
-                onClose={() => setModalKey(null)}
-                title={`Create ${activeTab?.label ?? ""}`}
-            >
-                {ActiveForm && (
-                    <ActiveForm onSuccess={() => setModalKey(null)} />
-                )}
-            </FormModal>
+            
+                <FormModal
+                    open={!!modalKey}
+                    onClose={() => setModalKey(null)}
+                    title={modalTitle}
+                >
+                    {ActiveForm && (
+                        <ActiveForm
+                            onSuccess={() => setModalKey(null)}
+                            onCancel={() => setModalKey(null)}
+                        />
+                    )}
+                </FormModal>
+
         </>
     );
 }

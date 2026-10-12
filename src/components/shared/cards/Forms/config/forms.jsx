@@ -9,7 +9,7 @@ import BookForm from "../BookForm";
 import TeacherAssignmentForm from "../teacherAssignment";
 import GradeCoordinatorForm from "../GradeCoordinatorForm";
 import TeacherProfileForm from "../TeacherProfileForm";
-
+import EnrollmentForm from "../EnrollmentForm";
 
 import gradeService from "../../../../../../lib/service/admin/gradeService";
 import academicYearService from "../../../../../../lib/service/admin/academicYearService";
@@ -21,8 +21,8 @@ import bookstoreService from "../../../../../../lib/service/books/bookstoreServi
 import teacherAssignmentService from "../../../../../../lib/service/admin/teacherAssignmentService";
 import teacherGradeCoordinatorService from "../../../../../../lib/service/admin/teacherGradeCoordinatorService";
 import teacherService from "../../../../../../lib/service/admin/teacherService";
-
-
+import studentService from "../../../../../../lib/service/admin/studentService";
+import enrollmentService from "../../../../../../lib/service/admin/enrollmentService";
 
 export const FORM_TABS = [
     {
@@ -73,7 +73,7 @@ export const FORM_TABS = [
     {
         key: "user",
         label: "User",
-        description: "Create user with role",
+        description: "Create user accounts with roles",
         Component: UserForm,
         service: userService,
         listKey: "getAllUsers",
@@ -90,8 +90,8 @@ export const FORM_TABS = [
     },
     {
         key: "teacherAssignment",
-        label: "Teacher Assi",
-        description: "Add teacher assignment",
+        label: "T Assign",
+        description: "Assign teachers to grades and subjects",
         Component: TeacherAssignmentForm,
         service: teacherAssignmentService,
         listKey: "getAllTeacherAssignments",
@@ -109,10 +109,24 @@ export const FORM_TABS = [
     {
         key: "teacherProfileForm",
         label: "Profile",
-        description: 'Create Teacher profile',
+        description: "Create Teacher or Student profiles",
         Component: TeacherProfileForm,
-        service: teacherService,
-        listKey: 'GetAllTeacherProfile',
-        chart: "bar,"
-    }
+        services: {
+            teacher: teacherService,
+            student: studentService,
+        },
+        listKeys: {
+            teacher: "getAllTeachers",
+            student: "getStudents",
+        },
+        chart: "bar",
+    },
+    {
+        key: "enrollment",
+        label: "Enrollment",
+        description: "Enroll existing students into a grade and academic year",
+        Component: EnrollmentForm,
+        services: enrollmentService,
+        chart: "bar",
+    },
 ];

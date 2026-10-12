@@ -1,21 +1,31 @@
+
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { useAuth } from "../../../context/AuthContext";
 import teacherAssignmentService from "../../../../lib/service/admin/teacherAssignmentService";
-import teacherStudentEnrollmentService from "../../../../lib/service/teacher/teacherStudentEnrollementService";
 
 // ------------------------------------------------------------
-// SMALL HELPERS
+// HELPERS
 // ------------------------------------------------------------
+
 const pickArray = (...candidates) =>
-    candidates.find((c) => Array.isArray(c)) ?? [];
+    candidates.find((candidate) => Array.isArray(candidate)) ?? [];
 
 const matches = (query, ...values) =>
     values
-        .filter((v) => v !== null && v !== undefined && v !== "")
+        .filter(
+            (value) =>
+                value !== null &&
+                value !== undefined &&
+                value !== ""
+        )
         .join(" ")
         .toLowerCase()
         .includes(query);
+
+// ------------------------------------------------------------
+// TEACHER DASHBOARD
+// ------------------------------------------------------------
 
 export default function TeacherDashboard() {
     const { user, loading: authLoading } = useAuth();
@@ -23,17 +33,12 @@ export default function TeacherDashboard() {
     const [assignments, setAssignments] = useState([]);
     const [assignmentsLoading, setAssignmentsLoading] = useState(true);
     const [assignmentsError, setAssignmentsError] = useState("");
-
-    const [students, setStudents] = useState([]);
-    const [academicYear, setAcademicYear] = useState(null);
-    const [studentsLoading, setStudentsLoading] = useState(true);
-    const [studentsError, setStudentsError] = useState("");
-
     const [search, setSearch] = useState("");
 
-    // ------------------------------------------------------------
-    // LOGGED-IN TEACHER INFO
-    // ------------------------------------------------------------
+    // --------------------------------------------------------
+    // LOGGED-IN TEACHER INFORMATION
+    // --------------------------------------------------------
+
     const userId = user?._id || user?.id || user?.userId;
 
     const teacherName = user?.name || "Teacher";
@@ -50,9 +55,10 @@ export default function TeacherDashboard() {
         .slice(0, 2)
         .toUpperCase();
 
-    // ------------------------------------------------------------
+    // --------------------------------------------------------
     // FETCH MY TEACHING ASSIGNMENTS
-    // ------------------------------------------------------------
+    // --------------------------------------------------------
+
     const loadMyAssignments = useCallback(async () => {
         if (!userId) {
             setAssignments([]);
@@ -64,145 +70,131 @@ export default function TeacherDashboard() {
             setAssignmentsLoading(true);
             setAssignmentsError("");
 
-            const res =
+            const response =
                 await teacherAssignmentService.getMyTeacherAssignments();
+
+            const result =
+                response?.data !== undefined
+                    ? response.data
+                    : response;
 
             setAssignments(
                 pickArray(
-                    res,
-                    res?.data,
-                    res?.assignments,
-                    res?.data?.assignments,
-                    res?.data?.data
+                    result,
+                    result?.assignments,
+                    result?.data,
+                    result?.data?.assignments
                 )
             );
-        } catch (err) {
-            console.error("LOAD MY TEACHER ASSIGNMENTS ERROR:", err);
+        } catch (error) {
+            console.error(
+                "LOAD MY TEACHER ASSIGNMENTS ERROR:",
+                error
+            );
+
             setAssignmentsError(
-                err?.response?.data?.message ||
+                error?.response?.data?.message ||
                     "Failed to load your teaching assignments."
             );
+
             setAssignments([]);
         } finally {
             setAssignmentsLoading(false);
         }
     }, [userId]);
 
-    // ------------------------------------------------------------
-    // FETCH MY STUDENTS
-    // ------------------------------------------------------------
-    const loadMyStudents = useCallback(async () => {
-        try {
-            setStudentsLoading(true);
-            setStudentsError("");
-
-            const data =
-                await teacherStudentEnrollmentService.getMyStudents();
-
-            setStudents(data?.students || []);
-            setAcademicYear(data?.academicYear || null);
-        } catch (err) {
-            console.error("LOAD MY STUDENTS ERROR:", err);
-            setStudentsError(
-                err?.response?.data?.message ||
-                    "Unable to load your students."
-            );
-            setStudents([]);
-            setAcademicYear(null);
-        } finally {
-            setStudentsLoading(false);
-        }
-    }, []);
-
-    // ------------------------------------------------------------
+    // --------------------------------------------------------
     // INITIAL LOAD
-    // ------------------------------------------------------------
+    // --------------------------------------------------------
+
     useEffect(() => {
         if (authLoading) return;
-        loadMyAssignments();
-        loadMyStudents();
-    }, [authLoading, loadMyAssignments, loadMyStudents]);
 
-    // ------------------------------------------------------------
-    // SHARED SEARCH QUERY
-    // ------------------------------------------------------------
+        loadMyAssignments();
+    }, [authLoading, loadMyAssignments]);
+
+    // --------------------------------------------------------
+    // SEARCH ASSIGNMENTS
+    // --------------------------------------------------------
+
     const query = search.trim().toLowerCase();
 
-    // ---- Filter assignments ----
     const visibleAssignments = useMemo(() => {
         if (!query) return assignments;
 
-        return assignments.filter((a) => {
-            const g = a.gradeId;
-            const s = a.subjectId;
-            const y = a.academicYearId;
+        return assignments.filter((assignment) => {
+            const grade = assignment.gradeId;
+            const subject = assignment.subjectId;
+            const year = assignment.academicYearId;
 
             return matches(
                 query,
-                g?.gradeName,
-                g?.name,
-                g?.grade,
-                g?.sectionName,
-                g?.section,
-                g?.sectionLabel,
-                s?.name,
-                s?.subjectName,
-                s?.title,
-                s?.code,
-                s?.subjectCode,
-                y?.name,
-                y?.label,
-                y?.yearName,
-                a.status,
-                a.isCoordinator ? "coordinator" : ""
+                grade?.gradeName,
+                grade?.name,
+                grade?.grade,
+                grade?.sectionName,
+                grade?.section,
+                grade?.sectionLabel,
+                subject?.name,
+                subject?.subjectName,
+                subject?.title,
+                subject?.code,
+                subject?.subjectCode,
+                year?.name,
+                year?.label,
+                year?.yearName,
+                year?.startYear,
+                year?.endYear,
+                assignment.status,
+                assignment.isCoordinator ? "coordinator" : "subject teacher"
             );
         });
     }, [assignments, query]);
 
-    // ---- Filter students ----
-    const visibleStudents = useMemo(() => {
-        if (!query) return students;
+    // --------------------------------------------------------
+    // STATISTICS
+    // --------------------------------------------------------
 
-        return students.filter((enrollment) => {
-            const student = enrollment.student;
-            const u = student?.user;
-
-            return matches(
-                query,
-                u?.name,
-                u?.email,
-                student?.admissionNumber,
-                enrollment.grade?.gradeName,
-                enrollment.grade?.sectionName,
-                enrollment.grade?.name
-            );
-        });
-    }, [students, query]);
-
-    // ------------------------------------------------------------
-    // STATS
-    // ------------------------------------------------------------
     const activeAssignments = assignments.filter(
-        (a) => a.status === "active"
+        (assignment) => assignment.status === "active"
     ).length;
 
     const inactiveAssignments = assignments.filter(
-        (a) => a.status === "inactive"
+        (assignment) => assignment.status === "inactive"
     ).length;
 
-    const coordinatorAssignments = assignments.filter(
-        (a) => a.isCoordinator === true
-    ).length;
+    const assignedGrades = new Set(
+        assignments
+            .map((assignment) => {
+                const grade = assignment.gradeId;
 
-    // ------------------------------------------------------------
+                return grade && typeof grade === "object"
+                    ? grade._id
+                    : grade;
+            })
+            .filter(Boolean)
+            .map(String)
+    ).size;
+
+    // --------------------------------------------------------
     // RENDER
-    // ------------------------------------------------------------
+    // --------------------------------------------------------
+
+    if (authLoading) {
+        return (
+            <div className="flex min-h-screen items-center justify-center bg-[#f7f6f5] text-zinc-600 dark:bg-[#0E0E0E] dark:text-zinc-300">
+                <div className="text-center">
+                    <div className="mx-auto h-8 w-8 animate-spin rounded-full border-2 border-zinc-300 border-t-zinc-900 dark:border-zinc-700 dark:border-t-white" />
+                    <p className="mt-4 text-sm">Loading your dashboard...</p>
+                </div>
+            </div>
+        );
+    }
+
     return (
         <div className="min-h-screen w-full overflow-hidden bg-[#f7f6f5] px-5 pb-10 pt-24 text-zinc-900 md:px-7 md:pt-28 dark:bg-[#0E0E0E] dark:text-zinc-100">
-
-            {/* ==================================================== */}
             {/* HEADER */}
-            {/* ==================================================== */}
+
             <section className="mb-8 flex flex-wrap items-center justify-between gap-5">
                 <div className="flex min-w-0 items-center gap-4">
                     {teacherImage ? (
@@ -244,23 +236,17 @@ export default function TeacherDashboard() {
 
                 <button
                     type="button"
-                    onClick={() => {
-                        loadMyAssignments();
-                        loadMyStudents();
-                    }}
-                    disabled={assignmentsLoading || studentsLoading}
+                    onClick={loadMyAssignments}
+                    disabled={assignmentsLoading}
                     className="rounded-xl border border-zinc-300 bg-white px-4 py-2.5 text-sm font-medium transition hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-900 dark:hover:bg-zinc-800"
                 >
-                    {assignmentsLoading || studentsLoading
-                        ? "Refreshing..."
-                        : "Refresh"}
+                    {assignmentsLoading ? "Refreshing..." : "Refresh"}
                 </button>
             </section>
 
-            {/* ==================================================== */}
-            {/* STATS */}
-            {/* ==================================================== */}
-            <section className="mb-8 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            {/* ASSIGNMENT STATISTICS */}
+
+            <section className="mb-8 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
                 <StatCard
                     label="Total Assignments"
                     value={assignments.length}
@@ -277,46 +263,27 @@ export default function TeacherDashboard() {
 
                 <StatCard
                     label="Assigned Grades"
-                    value={
-                        new Set(
-                            assignments
-                                .filter((a) => a.gradeId?._id)
-                                .map((a) => a.gradeId._id)
-                        ).size
-                    }
+                    value={assignedGrades}
                     description="Distinct assigned grades or sections"
                     loading={assignmentsLoading}
                 />
-
-                <StatCard
-                    label="My Students"
-                    value={students.length}
-                    description={
-                        academicYear
-                            ? `Academic year ${academicYear.name}`
-                            : "Students in your grades and sections"
-                    }
-                    loading={studentsLoading}
-                />
             </section>
 
-            {/* ==================================================== */}
-            {/* SHARED SEARCH */}
-            {/* ==================================================== */}
+            {/* ASSIGNMENT SEARCH */}
+
             <section className="mb-6">
                 <input
-                    type="text"
+                    type="search"
                     value={search}
-                    onChange={(e) => setSearch(e.target.value)}
-                    placeholder="Search assignments or students..."
+                    onChange={(event) => setSearch(event.target.value)}
+                    placeholder="Search grade, section, subject, academic year..."
                     className="w-full rounded-xl border border-zinc-300 bg-white px-4 py-3 text-sm outline-none transition placeholder:text-zinc-400 focus:border-zinc-500 focus:ring-2 focus:ring-zinc-200 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:focus:ring-zinc-800"
                 />
             </section>
 
-            {/* ==================================================== */}
             {/* MY TEACHING ASSIGNMENTS */}
-            {/* ==================================================== */}
-            <section className="mb-8 overflow-hidden rounded-2xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950">
+
+            <section className="overflow-hidden rounded-2xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950">
                 <div className="flex flex-col gap-4 border-b border-zinc-200 p-5 sm:flex-row sm:items-center sm:justify-between dark:border-zinc-800">
                     <div>
                         <h2 className="text-lg font-semibold">
@@ -354,14 +321,15 @@ export default function TeacherDashboard() {
 
                 {assignmentsLoading ? (
                     <div className="space-y-3 p-5">
-                        {Array.from({ length: 4 }).map((_, i) => (
+                        {Array.from({ length: 4 }).map((_, index) => (
                             <div
-                                key={i}
+                                key={index}
                                 className="h-16 animate-pulse rounded-xl bg-zinc-100 dark:bg-zinc-900"
                             />
                         ))}
                     </div>
-                ) : !assignmentsError && visibleAssignments.length === 0 ? (
+                ) : !assignmentsError &&
+                  visibleAssignments.length === 0 ? (
                     <EmptyState
                         title={
                             query
@@ -399,7 +367,7 @@ export default function TeacherDashboard() {
                             </thead>
 
                             <tbody>
-                                {visibleAssignments.map((assignment) => {
+                                {visibleAssignments.map((assignment, index) => {
                                     const grade = assignment.gradeId;
                                     const subject = assignment.subjectId;
                                     const year = assignment.academicYearId;
@@ -411,57 +379,63 @@ export default function TeacherDashboard() {
                                     const yearIsObject =
                                         year && typeof year === "object";
 
-                                    const gradeName =
-                                        (gradeIsObject &&
-                                            (grade.gradeName ||
-                                                grade.name ||
-                                                grade.grade)) ||
-                                        "—";
+                                    const gradeName = gradeIsObject
+                                        ? grade.gradeName ||
+                                          grade.name ||
+                                          grade.grade ||
+                                          "—"
+                                        : "—";
 
-                                    const sectionName =
-                                        (gradeIsObject &&
-                                            (grade.sectionName ||
-                                                grade.section ||
-                                                grade.sectionLabel)) ||
-                                        "";
+                                    const sectionName = gradeIsObject
+                                        ? grade.sectionName ||
+                                          grade.section ||
+                                          grade.sectionLabel ||
+                                          ""
+                                        : "";
 
-                                    const subjectName =
-                                        (subjectIsObject &&
-                                            (subject.name ||
-                                                subject.subjectName ||
-                                                subject.title)) ||
-                                        "—";
+                                    const subjectName = subjectIsObject
+                                        ? subject.name ||
+                                          subject.subjectName ||
+                                          subject.title ||
+                                          "—"
+                                        : "—";
 
-                                    const subjectCode =
-                                        (subjectIsObject &&
-                                            (subject.code ||
-                                                subject.subjectCode)) ||
-                                        "";
+                                    const subjectCode = subjectIsObject
+                                        ? subject.code ||
+                                          subject.subjectCode ||
+                                          ""
+                                        : "";
 
-                                    const yearLabel =
-                                        (yearIsObject &&
-                                            (year.name ||
-                                                year.label ||
-                                                year.yearName)) ||
-                                        (yearIsObject &&
-                                        (year.startYear != null ||
-                                            year.endYear != null)
-                                            ? `${year.startYear ?? ""}${
-                                                  year.endYear != null
-                                                      ? ` - ${year.endYear}`
-                                                      : ""
-                                              }`
-                                            : "—");
+                                    let yearLabel = "—";
+
+                                    if (yearIsObject) {
+                                        yearLabel =
+                                            year.name ||
+                                            year.label ||
+                                            year.yearName ||
+                                            (year.startYear != null ||
+                                            year.endYear != null
+                                                ? `${year.startYear ?? ""}${
+                                                      year.endYear != null
+                                                          ? ` - ${year.endYear}`
+                                                          : ""
+                                                  }`
+                                                : "—");
+                                    }
 
                                     return (
                                         <tr
-                                            key={assignment._id}
+                                            key={
+                                                assignment._id ||
+                                                `${String(grade)}-${String(subject)}-${index}`
+                                            }
                                             className="border-t border-zinc-100 transition hover:bg-zinc-50/70 dark:border-zinc-900 dark:hover:bg-zinc-900/50"
                                         >
                                             <td className="px-5 py-4">
                                                 <p className="font-medium text-zinc-900 dark:text-zinc-100">
                                                     {gradeName}
                                                 </p>
+
                                                 <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
                                                     {sectionName
                                                         ? `Section ${sectionName}`
@@ -473,6 +447,7 @@ export default function TeacherDashboard() {
                                                 <p className="font-medium text-zinc-900 dark:text-zinc-100">
                                                     {subjectName}
                                                 </p>
+
                                                 {subjectCode && (
                                                     <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
                                                         {subjectCode}
@@ -523,151 +498,6 @@ export default function TeacherDashboard() {
                         </div>
                     )}
             </section>
-
-            {/* ==================================================== */}
-            {/* MY STUDENTS */}
-            {/* ==================================================== */}
-            <section className="overflow-hidden rounded-2xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950">
-                <div className="flex flex-col gap-4 border-b border-zinc-200 p-5 sm:flex-row sm:items-center sm:justify-between dark:border-zinc-800">
-                    <div>
-                        <h2 className="text-lg font-semibold">
-                            My Students
-                        </h2>
-
-                        <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-                            {academicYear
-                                ? `Students enrolled in your grades and sections for ${academicYear.name}.`
-                                : "Students enrolled in your grades and sections."}
-                        </p>
-                    </div>
-
-                    <span className="rounded-full bg-zinc-100 px-3 py-1.5 text-xs font-medium text-zinc-700 dark:bg-zinc-900 dark:text-zinc-300">
-                        {visibleStudents.length} shown
-                    </span>
-                </div>
-
-                {studentsError && (
-                    <div className="m-4 rounded-xl border border-red-300 bg-red-50 p-4 text-sm text-red-700 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-300">
-                        <p className="font-medium">
-                            Unable to load students
-                        </p>
-
-                        <p className="mt-1">{studentsError}</p>
-
-                        <button
-                            type="button"
-                            onClick={loadMyStudents}
-                            className="mt-3 font-semibold underline underline-offset-4"
-                        >
-                            Try again
-                        </button>
-                    </div>
-                )}
-
-                {studentsLoading ? (
-                    <div className="space-y-3 p-5">
-                        {Array.from({ length: 4 }).map((_, i) => (
-                            <div
-                                key={i}
-                                className="h-16 animate-pulse rounded-xl bg-zinc-100 dark:bg-zinc-900"
-                            />
-                        ))}
-                    </div>
-                ) : !studentsError && visibleStudents.length === 0 ? (
-                    <EmptyState
-                        title={
-                            query
-                                ? "No matching students"
-                                : "No students found"
-                        }
-                        message={
-                            query
-                                ? "Try another search term."
-                                : "No students are enrolled in your assigned grades and sections yet."
-                        }
-                        onClear={query ? () => setSearch("") : null}
-                    />
-                ) : !studentsError ? (
-                    <div className="overflow-x-auto">
-                        <table className="w-full min-w-[750px] text-left text-sm">
-                            <thead className="bg-zinc-50 dark:bg-zinc-900">
-                                <tr className="text-xs uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
-                                    <th className="px-5 py-4 font-medium">
-                                        Student Name
-                                    </th>
-                                    <th className="px-5 py-4 font-medium">
-                                        Admission #
-                                    </th>
-                                    <th className="px-5 py-4 font-medium">
-                                        Grade
-                                    </th>
-                                    <th className="px-5 py-4 font-medium">
-                                        Section
-                                    </th>
-                                    <th className="px-5 py-4 font-medium">
-                                        Email
-                                    </th>
-                                </tr>
-                            </thead>
-
-                            <tbody>
-                                {visibleStudents.map((enrollment) => {
-                                    const student = enrollment.student;
-                                    const u = student?.user;
-
-                                    return (
-                                        <tr
-                                            key={
-                                                enrollment.enrollmentId ||
-                                                enrollment._id
-                                            }
-                                            className="border-t border-zinc-100 transition hover:bg-zinc-50/70 dark:border-zinc-900 dark:hover:bg-zinc-900/50"
-                                        >
-                                            <td className="px-5 py-4 font-medium text-zinc-900 dark:text-zinc-100">
-                                                {u?.name || "—"}
-                                            </td>
-
-                                            <td className="px-5 py-4 text-zinc-700 dark:text-zinc-300">
-                                                {student?.admissionNumber ||
-                                                    "—"}
-                                            </td>
-
-                                            <td className="px-5 py-4 text-zinc-700 dark:text-zinc-300">
-                                                {enrollment.grade?.gradeName ||
-                                                    enrollment.grade?.name ||
-                                                    "—"}
-                                            </td>
-
-                                            <td className="px-5 py-4 text-zinc-700 dark:text-zinc-300">
-                                                {enrollment.grade
-                                                    ?.sectionName ||
-                                                    enrollment.grade
-                                                        ?.section ||
-                                                    "—"}
-                                            </td>
-
-                                            <td className="px-5 py-4 text-zinc-500 dark:text-zinc-400">
-                                                {u?.email || "—"}
-                                            </td>
-                                        </tr>
-                                    );
-                                })}
-                            </tbody>
-                        </table>
-                    </div>
-                ) : null}
-
-                {!studentsLoading &&
-                    !studentsError &&
-                    students.length > 0 && (
-                        <div className="border-t border-zinc-200 px-5 py-3 dark:border-zinc-800">
-                            <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                                Showing {visibleStudents.length} of{" "}
-                                {students.length} students
-                            </p>
-                        </div>
-                    )}
-            </section>
         </div>
     );
 }
@@ -675,6 +505,7 @@ export default function TeacherDashboard() {
 // ------------------------------------------------------------
 // STAT CARD
 // ------------------------------------------------------------
+
 function StatCard({ label, value, description, loading }) {
     return (
         <div className="rounded-2xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-950">
@@ -700,6 +531,7 @@ function StatCard({ label, value, description, loading }) {
 // ------------------------------------------------------------
 // STATUS PILL
 // ------------------------------------------------------------
+
 function StatusPill({ status }) {
     const isActive = status === "active";
 
@@ -727,6 +559,7 @@ function StatusPill({ status }) {
 // ------------------------------------------------------------
 // EMPTY STATE
 // ------------------------------------------------------------
+
 function EmptyState({ title, message, onClear }) {
     return (
         <div className="px-6 py-16 text-center">
@@ -744,6 +577,7 @@ function EmptyState({ title, message, onClear }) {
                         strokeLinecap="round"
                         strokeLinejoin="round"
                     />
+
                     <path
                         d="M4 17a2.5 2.5 0 0 1 2.5-2.5H20M8 7h8M8 10h6"
                         strokeLinecap="round"
